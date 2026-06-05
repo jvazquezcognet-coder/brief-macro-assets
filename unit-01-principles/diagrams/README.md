@@ -1,1 +1,1 @@
-Diagrams for Unit 1: Basic Economic Principles
+# unit-01-principles/diagrams
