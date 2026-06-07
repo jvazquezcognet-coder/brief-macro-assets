@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build the PPF Curve</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Georgia, serif;
+    background: #f8f8f8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 1.2rem;
+    color: #1B7A6E;
+    font-weight: bold;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 20px;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .container {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 520px;
+  }
+
+  /* Points table */
+  .points-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+  }
+  .points-table th {
+    background: #1B7A6E;
+    color: white;
+    padding: 8px 12px;
+    text-align: center;
+    font-weight: bold;
+  }
+  .points-table th:first-child { border-radius: 6px 0 0 0; }
+  .points-table th:last-child { border-radius: 0 6px 0 0; }
+  .points-table td {
+    padding: 7px 12px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    color: #1a1a2e;
+  }
+  .points-table tr:nth-child(even) td { background: #f5f5f5; }
+  .points-table .opt { font-weight: bold; }
+
+  /* Status indicators */
+  .status {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #1B7A6E;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    vertical-align: middle;
+  }
+  .status.placed {
+    background: #1B7A6E;
+    border-color: #1B7A6E;
+  }
+  .status.placed::after {
+    content: '✓';
+    color: white;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  /* Canvas */
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 6px;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  /* Instructions */
+  .instruction {
+    font-size: 0.85rem;
+    color: #555;
+    text-align: center;
+    margin-bottom: 14px;
+    line-height: 1.5;
+    min-height: 2.5em;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  button {
+    padding: 10px 22px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.95rem;
+    font-family: Georgia, serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: #1B7A6E;
+    color: white;
+  }
+  .btn-primary:hover { background: #155f55; }
+  .btn-primary:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: white;
+    color: #1B7A6E;
+    border: 2px solid #1B7A6E;
+  }
+  .btn-secondary:hover { background: #f0faf9; }
+
+  /* Progress */
+  .progress {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #1B7A6E;
+    font-weight: bold;
+    margin-bottom: 12px;
+  }
+
+  /* Success message */
+  .success {
+    display: none;
+    background: #e8f5f0;
+    border: 1px solid #1B7A6E;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-top: 16px;
+    font-size: 0.9rem;
+    color: #1a1a2e;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .success.show { display: block; }
+  .success strong { color: #1B7A6E; }
+</style>
+</head>
+<body>
+
+<h1>Build the Production Possibilities Frontier</h1>
+<p class="subtitle">Click each point on the graph to place it,<br>then connect them to reveal the curve.</p>
+
+<div class="container">
+
+  <!-- Reference table -->
+  <table class="points-table">
+    <thead>
+      <tr><th>Option</th><th>Oil (barrels)</th><th>Corn (bushels)</th><th>Placed?</th></tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td class="opt">A</td><td>0</td><td>100</td><td><span class="status" id="s0"></span></td></tr>
+      <tr><td class="opt">B</td><td>20</td><td>96</td><td><span class="status" id="s1"></span></td></tr>
+      <tr><td class="opt">C</td><td>40</td><td>84</td><td><span class="status" id="s2"></span></td></tr>
+      <tr><td class="opt">D</td><td>60</td><td>64</td><td><span class="status" id="s3"></span></td></tr>
+      <tr><td class="opt">E</td><td>80</td><td>36</td><td><span class="status" id="s4"></span></td></tr>
+      <tr><td class="opt">F</td><td>100</td><td>0</td><td><span class="status" id="s5"></span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="progress" id="progress">0 of 6 points placed — click near each point on the graph</div>
+
+  <div class="canvas-wrap">
+    <canvas id="ppf" width="480" height="400"></canvas>
+  </div>
+
+  <p class="instruction" id="instruction">Click near each point on the graph to place it.</p>
+
+  <div class="btn-row">
+    <button class="btn-primary" id="connectBtn" disabled>Connect the dots</button>
+    <button class="btn-secondary" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="success" id="success">
+    <strong>Well done!</strong> The curve bows outward — that bow is the low-hanging fruit principle made visible.
+    Each step along the curve costs more corn than the last, because the easiest oil has already been extracted.
+    Points <em>inside</em> the curve are inefficient. Points <em>outside</em> are impossible with current resources.
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('ppf');
+const ctx = canvas.getContext('2d');
+
+const TEAL = '#1B7A6E';
+const DARK = '#1a1a2e';
+const LIGHT = '#e8f5f0';
+
+// Data points in data coordinates
+const dataPoints = [
+  { label: 'A', oil: 0,   corn: 100 },
+  { label: 'B', oil: 20,  corn: 96  },
+  { label: 'C', oil: 40,  corn: 84  },
+  { label: 'D', oil: 60,  corn: 64  },
+  { label: 'E', oil: 80,  corn: 36  },
+  { label: 'F', oil: 100, corn: 0   },
+];
+
+// Canvas margins
+const M = { left: 48, right: 20, top: 16, bottom: 44 };
+const W = canvas.width  - M.left - M.right;
+const H = canvas.height - M.top  - M.bottom;
+
+// Convert data coords to canvas coords
+function toCanvas(oil, corn) {
+  return {
+    x: M.left + (oil  / 100) * W,
+    y: M.top  + (1 - corn / 100) * H
+  };
+}
+
+// Convert canvas coords to data coords
+function toData(cx, cy) {
+  return {
+    oil:  ((cx - M.left) / W) * 100,
+    corn: (1 - (cy - M.top)  / H) * 100
+  };
+}
+
+const placed = new Array(6).fill(false);
+let curveDrawn = false;
+
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = '#fafafa';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 1;
+  [0,20,40,60,80,100].forEach(v => {
+    // Vertical
+    const x = toCanvas(v, 0).x;
+    ctx.beginPath(); ctx.moveTo(x, M.top); ctx.lineTo(x, M.top + H); ctx.stroke();
+    // Horizontal
+    const y = toCanvas(0, v).y;
+    ctx.beginPath(); ctx.moveTo(M.left, y); ctx.lineTo(M.left + W, y); ctx.stroke();
+  });
+
+  // Axes
+  ctx.strokeStyle = DARK;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(M.left, M.top);
+  ctx.lineTo(M.left, M.top + H);
+  ctx.lineTo(M.left + W, M.top + H);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = DARK;
+  ctx.font = 'bold 13px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Oil (barrels)', M.left + W/2, canvas.height - 4);
+
+  ctx.save();
+  ctx.translate(13, M.top + H/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('Corn (bushels)', 0, 0);
+  ctx.restore();
+
+  // Tick labels
+  ctx.font = '11px Georgia, serif';
+  ctx.fillStyle = '#555';
+  [0,20,40,60,80,100].forEach(v => {
+    const xc = toCanvas(v, 0);
+    ctx.textAlign = 'center';
+    ctx.fillText(v, xc.x, M.top + H + 16);
+    const yc = toCanvas(0, v);
+    ctx.textAlign = 'right';
+    ctx.fillText(v, M.left - 6, yc.y + 4);
+  });
+}
+
+function drawTargetZones() {
+  // Draw subtle target circles where points should go
+  dataPoints.forEach((dp, i) => {
+    if (!placed[i]) {
+      const c = toCanvas(dp.oil, dp.corn);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(27,122,110,0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  });
+}
+
+function drawPlacedPoints() {
+  dataPoints.forEach((dp, i) => {
+    if (placed[i]) {
+      const c = toCanvas(dp.oil, dp.corn);
+
+      // Dot
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = TEAL;
+      ctx.fill();
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Label
+      const offsets = [
+        [-14, -8], [8, -10], [8, -10],
+        [8, -10],  [8, -10], [8, 10]
+      ];
+      ctx.fillStyle = DARK;
+      ctx.font = 'bold 13px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(dp.label, c.x + offsets[i][0], c.y + offsets[i][1]);
+    }
+  });
+}
+
+function drawCurve() {
+  // Catmull-Rom spline through all points
+  const pts = dataPoints.map(dp => toCanvas(dp.oil, dp.corn));
+
+  // Shade feasible region first
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(i-1, 0)];
+    const p1 = pts[i];
+    const p2 = pts[i+1];
+    const p3 = pts[Math.min(i+2, pts.length-1)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+  }
+  ctx.lineTo(pts[pts.length-1].x, M.top + H);
+  ctx.lineTo(pts[0].x, M.top + H);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(27,122,110,0.07)';
+  ctx.fill();
+
+  // Draw curve
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(i-1, 0)];
+    const p1 = pts[i];
+    const p2 = pts[i+1];
+    const p3 = pts[Math.min(i+2, pts.length-1)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+  }
+  ctx.strokeStyle = TEAL;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // PPF label
+  const mid = toCanvas(50, 74);
+  ctx.save();
+  ctx.translate(mid.x, mid.y);
+  ctx.rotate(-0.85);
+  ctx.fillStyle = TEAL;
+  ctx.font = 'bold 12px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('PPF', 0, 0);
+  ctx.restore();
+
+  // Region labels
+  ctx.font = 'italic 11px Georgia, serif';
+  ctx.fillStyle = 'rgba(27,122,110,0.6)';
+  ctx.textAlign = 'center';
+  const feas = toCanvas(25, 35);
+  ctx.fillText('Feasible', feas.x, feas.y);
+  ctx.fillText('(inside)', feas.x, feas.y + 14);
+
+  ctx.fillStyle = 'rgba(150,150,150,0.8)';
+  const imp = toCanvas(75, 78);
+  ctx.fillText('Impossible', imp.x, imp.y);
+  ctx.fillText('(outside)', imp.x, imp.y + 14);
+}
+
+function redraw() {
+  drawGrid();
+  if (!curveDrawn) drawTargetZones();
+  if (curveDrawn) drawCurve();
+  drawPlacedPoints();
+}
+
+function updateUI() {
+  const count = placed.filter(Boolean).length;
+  document.getElementById('progress').textContent =
+    `${count} of 6 points placed`;
+
+  placed.forEach((p, i) => {
+    const el = document.getElementById('s' + i);
+    if (p) el.classList.add('placed');
+    else el.classList.remove('placed');
+  });
+
+  const allPlaced = placed.every(Boolean);
+  document.getElementById('connectBtn').disabled = !allPlaced;
+
+  if (allPlaced && !curveDrawn) {
+    document.getElementById('instruction').textContent =
+      'All points placed! Now click "Connect the dots" to draw the curve.';
+  } else if (!allPlaced) {
+    document.getElementById('instruction').textContent =
+      'Click near each dashed circle to place the point.';
+  }
+}
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top)  * scaleY
+  };
+}
+
+canvas.addEventListener('click', handleClick);
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  handleClick(e);
+});
+
+function handleClick(e) {
+  if (curveDrawn) return;
+  const pos = getCanvasPos(e);
+
+  // Find closest unplaced point within tolerance
+  let closest = -1;
+  let minDist = Infinity;
+  const tolerance = 30; // pixels on canvas
+
+  dataPoints.forEach((dp, i) => {
+    if (placed[i]) return;
+    const c = toCanvas(dp.oil, dp.corn);
+    const dist = Math.sqrt((pos.x - c.x)**2 + (pos.y - c.y)**2);
+    if (dist < tolerance && dist < minDist) {
+      minDist = dist;
+      closest = i;
+    }
+  });
+
+  if (closest >= 0) {
+    placed[closest] = true;
+    redraw();
+    updateUI();
+  }
+}
+
+document.getElementById('connectBtn').addEventListener('click', () => {
+  curveDrawn = true;
+  redraw();
+  document.getElementById('instruction').textContent =
+    'The curve bows outward — that\'s the low-hanging fruit principle made visible.';
+  document.getElementById('success').classList.add('show');
+  document.getElementById('connectBtn').disabled = true;
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  placed.fill(false);
+  curveDrawn = false;
+  document.getElementById('success').classList.remove('show');
+  document.getElementById('connectBtn').disabled = true;
+  document.getElementById('instruction').textContent =
+    'Click near each dashed circle to place the point.';
+  document.getElementById('progress').textContent = '0 of 6 points placed';
+  redraw();
+  updateUI();
+});
+
+// Initial draw
+redraw();
+updateUI();
+</script>
+</body>
+</html>
